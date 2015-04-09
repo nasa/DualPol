@@ -202,6 +202,7 @@ class DualPolRetrieval(object):
            warnings.warn(self.name_dz+wstr)
            return False
 
+    @fn_timer
     def calculate_kdp(self):
         """
         Wrapper method for calculating KDP.
@@ -286,7 +287,8 @@ class DualPolRetrieval(object):
                     print 'Sounding in wrong data format'
                     self.T_flag = False
         self.interpolate_sounding_to_radar()
-
+    
+    @fn_timer
     def get_hid(self):
         """Calculate hydrometeror ID, add to radar object."""
         dz = self.radar.fields[self.name_dz]['data']
@@ -298,16 +300,17 @@ class DualPolRetrieval(object):
         else:
             ld = None
         if not self.winter_flag:
-            mu = csu_fhc.csu_fhc_summer(dz=dz, zdr=dr, rho=rh, kdp=kd, ldr=ld,
-                          use_temp=self.T_flag, band=self.band,
+            scores = csu_fhc.csu_fhc_summer(dz=dz, zdr=dr, rho=rh, kdp=kd,
+                          ldr=ld, use_temp=self.T_flag, band=self.band,
                           method=self.fhc_method, T=self.radar_T,
                           verbose=self.verbose, temp_factor=self.T_factor,
                           weights=self.fhc_weights)
-            fh = np.argmax(mu, axis=0) + 1
+            fh = np.argmax(scores, axis=0) + 1
             self.add_field_to_radar_object(fh, field_name=self.name_fhc)
         else:
             print 'Winter HID not enabled yet, sorry!'
 
+    @fn_timer
     def get_precip_rate(self, ice_flag=False, rain_method='hidro'):
         """Calculate rain rate, add to radar object."""
         dz = self.radar.fields[self.name_dz]['data']
@@ -343,6 +346,7 @@ class DualPolRetrieval(object):
                                        long_name='Rainfall Method',
                                        standard_name='Rainfall Method')
 
+    @fn_timer
     def get_dsd(self):
         """Calculate DSD information, add to radar object."""
         dz = self.radar.fields[self.name_dz]['data']
@@ -359,6 +363,7 @@ class DualPolRetrieval(object):
         self.add_field_to_radar_object(mu, field_name='MU', units=' ',
                                        long_name='Mu', standard_name='Mu')
 
+    @fn_timer
     def get_liquid_and_frozen_mass(self):
         """Calculate liquid/ice mass, add to radar object."""
         mw, mi = csu_liquid_ice_mass.calc_liquid_ice_mass(
@@ -429,6 +434,11 @@ class DualPolRetrieval(object):
 
 class HidColors(object):
 
+    """
+    Experimental, untested class to help with colormaps/bars when plotting 
+    hydrometeor ID data with Py-ART.
+    """
+
     def __init__(self, winter=False):
         if not winter:
             self.hid_colors = ['White', 'LightBlue', 'MediumBlue', 'DarkOrange',
@@ -438,6 +448,7 @@ class HidColors(object):
         self.cmaphid = colors.ListedColormap(self.hid_colors)
 
     def adjust_fhc_colorbar_for_pyart(self, cb):
+        """Mods to make a hydrometeor ID colorbar"""
         cb.set_ticks(np.arange(1.4, 10, 0.9))
         cb.ax.set_yticklabels(['Drizzle', 'Rain', 'Ice Crystals', 'Aggregates',
                                'Wet Snow', 'Vertical Ice', 'LD Graupel',
@@ -447,6 +458,7 @@ class HidColors(object):
         return cb
 
     def adjust_meth_colorbar_for_pyart(self, cb):
+        """Mods to make a rainfall method colorbar"""
         cb.set_ticks(np.arange(1.25, 5, 0.833))
         cb.ax.set_yticklabels(['R(Kdp, Zdr)', 'R(Kdp)', 'R(Z, Zdr)', 'R(Z)',
                                'R(Zrain)'])
