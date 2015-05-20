@@ -2,9 +2,9 @@
 Title/Version
 -------------
 Python Interface to Dual-Pol Radar Algorithms (DualPol)
-DualPol v0.5
-Developed & tested with Python 2.7.8
-Last changed 3/13/2015
+DualPol v0.6
+Developed & tested with Python 2.7
+Last changed 5/20/2015
     
     
 Author
@@ -17,6 +17,12 @@ timothy.j.lang@nasa.gov
 
 Overview
 --------
+This is an object-oriented Python module that facilitates precipitation
+retrievals (e.g., hydrometeor type, precipitation rate, precipitation mass, 
+particle size distribution information) from polarimetric radar data. It 
+leverages existing open source radar software packages to perform all-in-one 
+retrievals that are then easily visualized or saved using existing software.
+
 To access this module, add the following to your program and then make sure
 the path to this script is in your PYTHONPATH:
 import dualpol
@@ -24,7 +30,7 @@ import dualpol
 
 Notes
 -----
-Dependencies: numpy, pyart, singledop, warnings, skewt, csu_radartools
+Dependencies: numpy, pyart, warnings, skewt, csu_radartools, matplotlib
 
 
 References
@@ -33,6 +39,10 @@ References
 
 Change Log
 ----------
+v0.6 Major Changes (05/20/15):
+1. KDP calculation accepts gate spacing keyword (gs).
+2. Adjusted sounding read to work with latest version of skewt
+
 v0.5 Major Changes (03/13/15):
 1. KDP calculation implemented.
 2. Moved keyword arguments to separate dictionary (kwargs) and implemented 
@@ -62,7 +72,7 @@ from pyart.io.common import radar_coords_to_cart
 from skewt import SkewT
 from csu_radartools import (csu_fhc, csu_liquid_ice_mass, csu_blended_rain,
                             csu_dsd, csu_kdp)
-from singledop import fn_timer
+#from singledop import fn_timer
 
 RNG_MULT = 1000.0
 DEFAULT_WEIGHTS = csu_fhc.DEFAULT_WEIGHTS
@@ -78,7 +88,7 @@ DEFAULT_KW = {'dz': 'DZ', 'dr': 'DR', 'dp': None, 'rh': 'RH',
           'fhc_method': 'hybrid', 'kdp_method': 'CSU', 'bad': BAD,
           'use_temp': True, 'ice_flag': False, 'dsd_flag': True,
           'fhc_flag': True, 'rain_method': 'hidro', 'precip_flag': True,
-          'liquid_ice_flag': True, 'winter': False}
+          'liquid_ice_flag': True, 'winter': False, 'gs': 150.0}
 
 kwargs = np.copy(DEFAULT_KW)
 
@@ -116,6 +126,7 @@ class DualPolRetrieval(object):
         self.kdp_method = kwargs['kdp_method']
         self.bad = kwargs['bad']
         self.thresh_sdp = kwargs['thresh_sdp']
+        self.gs = kwargs['gs']
         flag = self.do_name_check()
         if not flag:
             return
@@ -127,11 +138,11 @@ class DualPolRetrieval(object):
         self.winter_flag = kwargs['winter']
         
         #Do FHC
+        self.name_fhc = kwargs['fhc_name']
         if kwargs['fhc_flag']:
             self.fhc_weights = kwargs['fhc_weights']
             self.fhc_method = kwargs['fhc_method']
             self.band = kwargs['band']
-            self.name_fhc = kwargs['fhc_name']
             self.get_hid()
         
         #Other precip retrievals
@@ -202,7 +213,7 @@ class DualPolRetrieval(object):
            warnings.warn(self.name_dz+wstr)
            return False
 
-    @fn_timer
+#    @fn_timer
     def calculate_kdp(self):
         """
         Wrapper method for calculating KDP.
@@ -228,19 +239,19 @@ class DualPolRetrieval(object):
         """
         Calls the csu_radartools.csu_kdp module to obtain KDP, FDP, and SDP.
         """
+        if self.verbose:
+            print 'Calculating KDP via CSU method'
         dp = self.extract_unmasked_data(self.name_dp)
         dz = self.extract_unmasked_data(self.name_dz)
         kdp = np.zeros_like(dp) + self.bad
         fdp = kdp * 1.0
         sdp = kdp * 1.0
         rng = self.radar.range['data'] / RNG_MULT
-        nrays, ngates = np.shape(dz)
-        for i in xrange(nrays):
-            if self.verbose:
-                if i % 100 == 0:
-                    print 'i =', i, 'of', nrays-1
-            kdp[i,:],fdp[i,:],sdp[i,:] = csu_kdp.calc_kdp_bringi(dp=dp[i,:],
-                        dz=dz[i,:], rng=rng, thsd=self.thresh_sdp, bad=self.bad)
+        az = self.radar.azimuth['data']
+        rng2d, az2d = np.meshgrid(rng, az)
+        kdp, fdp, sdp = \
+            csu_kdp.calc_kdp_bringi(dp=dp, dz=dz, rng=rng2d, gs=self.gs,
+                                    thsd=self.thresh_sdp, bad=self.bad)
         self.name_fdp = 'FDP_'+self.kdp_method
         self.add_field_to_radar_object(fdp, units='deg',
                         standard_name='Filtered Differential Phase',
@@ -274,8 +285,13 @@ class DualPolRetrieval(object):
             if isinstance(sounding, str):
                 try:
                     snd = SkewT.Sounding(sounding)
-                    self.snd_T = snd.data['temp']
-                    self.snd_z = snd.data['hght']
+                    # Test for new version of skewt package
+                    if hasattr(snd, 'soundingdata'):
+                        self.snd_T = snd.soundingdata['temp']
+                        self.snd_z = snd.soundingdata['hght']
+                    else:
+                        self.snd_T = snd.data['temp']
+                        self.snd_z = snd.data['hght']
                 except:
                     print 'Sounding read fail'
                     self.T_flag = False
@@ -288,7 +304,7 @@ class DualPolRetrieval(object):
                     self.T_flag = False
         self.interpolate_sounding_to_radar()
     
-    @fn_timer
+#    @fn_timer
     def get_hid(self):
         """Calculate hydrometeror ID, add to radar object."""
         dz = self.radar.fields[self.name_dz]['data']
@@ -310,7 +326,7 @@ class DualPolRetrieval(object):
         else:
             print 'Winter HID not enabled yet, sorry!'
 
-    @fn_timer
+#    @fn_timer
     def get_precip_rate(self, ice_flag=False, rain_method='hidro'):
         """Calculate rain rate, add to radar object."""
         dz = self.radar.fields[self.name_dz]['data']
@@ -346,7 +362,7 @@ class DualPolRetrieval(object):
                                        long_name='Rainfall Method',
                                        standard_name='Rainfall Method')
 
-    @fn_timer
+#    @fn_timer
     def get_dsd(self):
         """Calculate DSD information, add to radar object."""
         dz = self.radar.fields[self.name_dz]['data']
@@ -363,7 +379,7 @@ class DualPolRetrieval(object):
         self.add_field_to_radar_object(mu, field_name='MU', units=' ',
                                        long_name='Mu', standard_name='Mu')
 
-    @fn_timer
+#    @fn_timer
     def get_liquid_and_frozen_mass(self):
         """Calculate liquid/ice mass, add to radar object."""
         mw, mi = csu_liquid_ice_mass.calc_liquid_ice_mass(
@@ -394,7 +410,7 @@ class DualPolRetrieval(object):
                       'long_name': long_name,
                       'standard_name': standard_name,
                       '_FillValue': fill_value}
-        self.radar.add_field(field_name, field_dict)
+        self.radar.add_field(field_name, field_dict, replace_existing=True)
 
     def interpolate_sounding_to_radar(self):
         """Takes sounding data and interpolates it to every radar gate."""
