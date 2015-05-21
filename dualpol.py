@@ -4,7 +4,7 @@ Title/Version
 Python Interface to Dual-Pol Radar Algorithms (DualPol)
 DualPol v0.6
 Developed & tested with Python 2.7
-Last changed 5/20/2015
+Last changed 5/21/2015
     
     
 Author
@@ -33,15 +33,12 @@ Notes
 Dependencies: numpy, pyart, warnings, skewt, csu_radartools, matplotlib
 
 
-References
-----------
-
-
 Change Log
 ----------
-v0.6 Major Changes (05/20/15):
+v0.6 Major Changes (05/21/15):
 1. KDP calculation accepts gate spacing keyword (gs).
 2. Adjusted sounding read to work with latest version of skewt
+3. More info added to docstrings
 
 v0.5 Major Changes (03/13/15):
 1. KDP calculation implemented.
@@ -72,7 +69,7 @@ from pyart.io.common import radar_coords_to_cart
 from skewt import SkewT
 from csu_radartools import (csu_fhc, csu_liquid_ice_mass, csu_blended_rain,
                             csu_dsd, csu_kdp)
-#from singledop import fn_timer
+# from singledop import fn_timer
 
 RNG_MULT = 1000.0
 DEFAULT_WEIGHTS = csu_fhc.DEFAULT_WEIGHTS
@@ -96,12 +93,44 @@ kwargs = np.copy(DEFAULT_KW)
 
 class DualPolRetrieval(object):
 
+    """
+    Class that wraps all the dual-polarization retrievals powered by
+    CSU_RadarTools.
+    
+    Brief overview of DualPolRetrieval structure
+    --------------------------------------------
+    Main attributes of interest is radar, which is the original Py-ART radar
+    object provided to DualPolRetrieval. DualPolRetrieval.radar contains
+    new fields based on what the user wanted DualPolRetrieval to do.
+
+    New fields that can be in DualPolRetrieval.radar.fields:
+    'FH' (or whatever user provided in fhc_name kwarg) = HID
+    'FI' = Ice Fraction
+    'ZDP' = Difference Reflectivity
+    'KDP_CSU' = KDP as calculated by CSU_RadarTools
+    'FDP_CSU' = Filtered differential phase
+    'SDP_CSU' = Standard deviation of differential phase
+    'MI' = Mass of ice
+    'MW' = Mass of liquid water
+    'rain' = Rainfall rate
+    'method' = Rainfall method used
+    'D0' = Median Volume Diameter
+    'NW' = Normalized Intercept Parameter
+    'MU' = Mu in Gamma DSD model
+    """
+
     def __init__(self, radar, **kwargs):
         """
+        Arguments
+        ---------
         radar = Py-ART radar object
+        
+        Keywords
+        --------
         dz = String name of reflectivity field
         dr = String name of differential reflectivity field
-        kd = String name of specific differential phase field
+        kd = String name of specific differential phase field, if not provided
+             it will be calculated using csu_radartools
         rh = String name of correlation coefficient field
         ld = String name of linear depolarization ratio field
         dp = String name of differential phase field
@@ -109,9 +138,32 @@ class DualPolRetrieval(object):
                    sounding['z'] = Heights (km MSL), must be montonic
                    sounding['T'] = Temperatures (C)
         winter = Flag to note whether to use wintertime retrievals
-        band = Radar frequency band letter
+        band = Radar frequency band letter ('C' or 'S' supported)
+        verbose = Set to True to get text feedback
+        thresh_sdp = Threshold on standard deviation of differential phase to
+                     use on KDP calculation (if done)
+        fhc_T_factor = Extra weighting on T to be used in HID calculations
+        fhc_weights = Weights for variables in HID. Dictionary form, like so:
+            {'DZ': 1.5, 'DR': 0.8, 'KD': 1.0, 'RH': 0.8, 'LD': 0.5, 'T': 0.4}
+        fhc_name = Name to give HID field once calculated
+        fhc_method = 'hybrid' or 'linear' methods; hybrid preferred
+        kdp_method = 'CSU' currently supported
+        bad = Value to provide bad data
+        use_temp = Set to False to not consider T in HID calculations
+        rain_method = Method to use to estimate rainfall. If not 'hidro', then
+                      will use blended rainfall algorithm based on ZDP & ice
+                      fraction. If 'hidro', then uses CSU_HIDRO approach.
+        ice_flag = Set to True to return ice fraction and ZDP from CSU blended
+                   rainfall algorithm and store them as radar object fields. Only
+                   used if rain_method is not 'hidro'.
+        dsd_flag = Set to False to not calculate DSD parameters
+        fhc_flag = Set to False to not calculate HID
+        precip_flag = Set to False to not calculate rainfall
+        liquid_ice_flag = Set to False to not calculate liquid/ice mass
+        gs = Gate spacing of the radar (meters). Only used if KDP is calculated
+             using CSU_RadarTools.
         """
-        #Set radar fields
+        # Set radar fields
         kwargs = check_kwargs(kwargs, DEFAULT_KW)
         self.verbose = kwargs['verbose']
         flag = self.do_radar_check(radar)
@@ -131,13 +183,13 @@ class DualPolRetrieval(object):
         if not flag:
             return
         
-        #Get sounding info
+        # Get sounding info
         self.T_flag = kwargs['use_temp']
         self.T_factor = kwargs['fhc_T_factor']
         self.get_sounding(kwargs['sounding'])
         self.winter_flag = kwargs['winter']
         
-        #Do FHC
+        # Do FHC
         self.name_fhc = kwargs['fhc_name']
         if kwargs['fhc_flag']:
             self.fhc_weights = kwargs['fhc_weights']
@@ -145,7 +197,7 @@ class DualPolRetrieval(object):
             self.band = kwargs['band']
             self.get_hid()
         
-        #Other precip retrievals
+        # Other precip retrievals
         if kwargs['precip_flag']:
             self.get_precip_rate(ice_flag=kwargs['ice_flag'],
                                  rain_method=kwargs['rain_method'])
@@ -166,13 +218,13 @@ class DualPolRetrieval(object):
                 return False
         else:
             self.radar = radar
-        #Checking for actual radar object
+        # Checking for actual radar object
         try:
             junk = self.radar.latitude['data']
         except:
             warnings.warn('Need a real Py-ART radar object, try again')
             return False
-        return True #Actual radar object provided by user
+        return True  # Actual radar object provided by user
         
     def do_name_check(self):
         """
@@ -317,10 +369,10 @@ class DualPolRetrieval(object):
             ld = None
         if not self.winter_flag:
             scores = csu_fhc.csu_fhc_summer(dz=dz, zdr=dr, rho=rh, kdp=kd,
-                          ldr=ld, use_temp=self.T_flag, band=self.band,
-                          method=self.fhc_method, T=self.radar_T,
-                          verbose=self.verbose, temp_factor=self.T_factor,
-                          weights=self.fhc_weights)
+                ldr=ld, use_temp=self.T_flag, band=self.band,
+                method=self.fhc_method, T=self.radar_T,
+                verbose=self.verbose, temp_factor=self.T_factor,
+                weights=self.fhc_weights)
             fh = np.argmax(scores, axis=0) + 1
             self.add_field_to_radar_object(fh, field_name=self.name_fhc)
         else:
@@ -340,15 +392,14 @@ class DualPolRetrieval(object):
             else:
                 if not ice_flag:
                     rain, method = csu_blended_rain.calc_blended_rain(dz=dz,
-                                                                 zdr=dr, kdp=kd)
+                        zdr=dr, kdp=kd)
                 else:
                     rain, method, zdp, fi =\
-                          csu_blended_rain.calc_blended_rain(dz=dz, zdr=dr,
-                                                      kdp=kd, ice_flag=ice_flag)
+                        csu_blended_rain.calc_blended_rain(dz=dz, zdr=dr, kdp=kd,
+                                                           ice_flag=ice_flag)
                     self.add_field_to_radar_object(zdp, field_name='ZDP',
-                                           units='dB',
-                                           long_name='Difference Reflectivity',
-                                        standard_name='Difference Reflectivity')
+                        units='dB', long_name='Difference Reflectivity',
+                        standard_name='Difference Reflectivity')
                     self.add_field_to_radar_object(fi, field_name='FI', units='',
                                                    long_name='Ice Fraction',
                                                    standard_name='Ice Fraction')
@@ -451,8 +502,17 @@ class DualPolRetrieval(object):
 class HidColors(object):
 
     """
-    Experimental, untested class to help with colormaps/bars when plotting 
-    hydrometeor ID data with Py-ART.
+    Class to help with colormaps/bars when plotting
+    hydrometeor ID and rainfall method data with Py-ART.
+    
+    Sample interface
+    ----------------
+    radar = pyart.io.read(filename)
+    retrieve = dualpol.DualPolRetrieval(radar, **kwargs)
+    hidcolor = dualpol.HidColors()
+    display = pyart.graph.RadarDisplay(retrieve.radar)
+    display.plot_ppi('FH', vmin=0, vmax=10, cmap=hidcolor.cmaphid)
+    display.cbs[0] = hidcolor.adjust_fhc_colorbar_for_pyart(display.cbs[0])
     """
 
     def __init__(self, winter=False):
