@@ -9,11 +9,12 @@ DualPol works under Python 2.7  and 3.4 on most Mac/Linux setups. Windows instal
 Put dualpol.py in your PYTHONPATH.
 <p>
 The following dependencies need to be installed first:<br>
-A robust version of Python 2.7  or 3.4 w/ most standard scientific packages (e.g., numpy, matplotlib, pandas, etc.) - Get one for free here: https://store.continuum.io/cshop/anaconda/<br>
-The Python Atmospheric Radiation Measurement (ARM) Radar Toolkit (Py-ART; https://github.com/ARM-DOE/pyart)<br>
-CSU_RadarTools (https://github.com/CSU-Radarmet/CSU_RadarTools) - a Python 3 version can be found here: https://github.com/tjlang/CSU_RadarTools<br>
-SkewT (https://pypi.python.org/pypi/SkewT) - a Python 3 version can be found here: https://github.com/tjlang/SkewT<br>
-<p>
+<ul>
+<li>A robust version of Python 2.7  or 3.4 w/ most standard scientific packages (e.g., numpy, matplotlib, pandas, etc.) - Get one for free here: https://store.continuum.io/cshop/anaconda/
+<li>The Python Atmospheric Radiation Measurement (ARM) Radar Toolkit (Py-ART; https://github.com/ARM-DOE/pyart)
+CSU_RadarTools (https://github.com/CSU-Radarmet/CSU_RadarTools) - a Python 3 version can be found here: https://github.com/tjlang/CSU_RadarTools
+<li>SkewT (https://pypi.python.org/pypi/SkewT) - a Python 3 version can be found here: https://github.com/tjlang/SkewT
+</ul>
 Specific import calls in the DualPol source code:<br>
 import numpy as np<br>
 import warnings<br>
@@ -29,4 +30,4 @@ Using DualPol
 To access everything:
 import dualpol
 <p>
-A demonstration notebook is in the notebookd directory.
+A demonstration notebook is in the notebooks directory.
