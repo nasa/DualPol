@@ -2,9 +2,9 @@
 Title/Version
 -------------
 Python Interface to Dual-Pol Radar Algorithms (DualPol)
-DualPol v0.7
-Developed & tested with Python 2.7
-Last changed 07/02/2015
+DualPol v0.8
+Developed & tested with Python 2.7 and 3.4
+Last changed 08/07/2015
 
 
 Author
@@ -31,10 +31,15 @@ import dualpol
 Notes
 -----
 Dependencies: numpy, pyart, warnings, skewt, csu_radartools, matplotlib
+Python 3 compliant SkewT here: https://github.com/tjlang/SkewT
+Python 3 CSU_RadarTools here: https://github.com/tjlang/CSU_RadarTools
 
 
 Change Log
 ----------
+v0.8 Major Changes (08/07/15):
+1. Now supports Python 3.4 and 2.7. Other versions untested.
+
 v0.7 Major Changes (07/02/15):
 1. Made code pep8 compliant
 
@@ -63,7 +68,7 @@ v0.1 Functionality(01/26/15):
 2. Support for sounding import.
 
 """
-
+from __future__ import print_function
 import numpy as np
 import warnings
 import pyart
@@ -72,7 +77,6 @@ from pyart.io.common import radar_coords_to_cart
 from skewt import SkewT
 from csu_radartools import (csu_fhc, csu_liquid_ice_mass, csu_blended_rain,
                             csu_dsd, csu_kdp)
-# from singledop import fn_timer
 
 RNG_MULT = 1000.0
 DEFAULT_WEIGHTS = csu_fhc.DEFAULT_WEIGHTS
@@ -242,21 +246,21 @@ class DualPolRetrieval(object):
                     if self.name_ld is not None:
                         if self.name_ld not in self.radar.fields:
                             if self.verbose:
-                                print 'Not finding LDR field, not using'
+                                print('Not finding LDR field, not using')
                             self.name_ld = None
                     else:
                         if self.verbose:
-                            print 'Not provided LDR field, not using'
+                            print('Not provided LDR field, not using')
                     if self.name_kd is not None:
                         if self.name_kd not in self.radar.fields:
                             if self.verbose:
-                                print 'Not finding KDP field, calculating'
+                                print('Not finding KDP field, calculating')
                             kdp_flag = self.calculate_kdp()
                         else:
                             kdp_flag = True
                     else:
                         if self.verbose:
-                            print 'Not provided KDP field, calculating'
+                            print('Not provided KDP field, calculating')
                         kdp_flag = self.calculate_kdp()
                     return kdp_flag  # All required variables present?
                 else:
@@ -269,7 +273,6 @@ class DualPolRetrieval(object):
             warnings.warn(self.name_dz+wstr)
             return False
 
-#    @fn_timer
     def calculate_kdp(self):
         """
         Wrapper method for calculating KDP.
@@ -297,7 +300,7 @@ class DualPolRetrieval(object):
         Calls the csu_radartools.csu_kdp module to obtain KDP, FDP, and SDP.
         """
         if self.verbose:
-            print 'Calculating KDP via CSU method'
+            print('Calculating KDP via CSU method')
         dp = self.extract_unmasked_data(self.name_dp)
         dz = self.extract_unmasked_data(self.name_dz)
         kdp = np.zeros_like(dp) + self.bad
@@ -336,7 +339,7 @@ class DualPolRetrieval(object):
         or a properly formatted dict).
         """
         if sounding is None:
-            print 'No sounding provided'
+            print('No sounding provided')
             self.T_flag = False
         else:
             if isinstance(sounding, str):
@@ -350,18 +353,17 @@ class DualPolRetrieval(object):
                         self.snd_T = snd.data['temp']
                         self.snd_z = snd.data['hght']
                 except:
-                    print 'Sounding read fail'
+                    print('Sounding read fail')
                     self.T_flag = False
             else:
                 try:
                     self.snd_T = sounding['T']
                     self.snd_z = sounding['z']
                 except:
-                    print 'Sounding in wrong data format'
+                    print('Sounding in wrong data format')
                     self.T_flag = False
         self.interpolate_sounding_to_radar()
 
-#    @fn_timer
     def get_hid(self):
         """Calculate hydrometeror ID, add to radar object."""
         dz = self.radar.fields[self.name_dz]['data']
@@ -382,9 +384,8 @@ class DualPolRetrieval(object):
             fh = np.argmax(scores, axis=0) + 1
             self.add_field_to_radar_object(fh, field_name=self.name_fhc)
         else:
-            print 'Winter HID not enabled yet, sorry!'
+            print('Winter HID not enabled yet, sorry!')
 
-#    @fn_timer
     def get_precip_rate(self, ice_flag=False, rain_method='hidro'):
         """Calculate rain rate, add to radar object."""
         dz = self.radar.fields[self.name_dz]['data']
@@ -410,7 +411,7 @@ class DualPolRetrieval(object):
                         fi, field_name='FI', units='',
                         long_name='Ice Fraction', standard_name='Ice Fraction')
         else:
-            print 'Winter precip not enabled yet, sorry!'
+            print('Winter precip not enabled yet, sorry!')
             return
         self.add_field_to_radar_object(rain, field_name='rain', units='mm h-1',
                                        long_name='Rainfall Rate',
@@ -419,7 +420,6 @@ class DualPolRetrieval(object):
                                        long_name='Rainfall Method',
                                        standard_name='Rainfall Method')
 
-#    @fn_timer
     def get_dsd(self):
         """Calculate DSD information, add to radar object."""
         dz = self.radar.fields[self.name_dz]['data']
@@ -437,7 +437,6 @@ class DualPolRetrieval(object):
         self.add_field_to_radar_object(mu, field_name='MU', units=' ',
                                        long_name='Mu', standard_name='Mu')
 
-#    @fn_timer
     def get_liquid_and_frozen_mass(self):
         """Calculate liquid/ice mass, add to radar object."""
         mw, mi = csu_liquid_ice_mass.calc_liquid_ice_mass(
@@ -480,7 +479,7 @@ class DualPolRetrieval(object):
             rad_z1d = self.radar_z.ravel()
             rad_T1d = np.interp(rad_z1d, self.snd_z, self.snd_T)
             if self.verbose:
-                print 'Trying to get radar_T'
+                print('Trying to get radar_T')
             self.radar_T = np.reshape(rad_T1d, shape)
 
     def check_sounding_for_montonic(self):
@@ -534,9 +533,9 @@ class HidColors(object):
     def adjust_fhc_colorbar_for_pyart(self, cb):
         """Mods to make a hydrometeor ID colorbar"""
         cb.set_ticks(np.arange(1.4, 10, 0.9))
-        cb.ax.set_yticklabels(['Drizzle', 'Rain', 'Ice Crystals', 'Aggregates',
-                               'Wet Snow', 'Vertical Ice', 'LD Graupel',
-                               'HD Graupel', 'Hail', 'Big Drops'])
+        cb.ax.set_yticklabels(['Drizzle', 'Rain', 'Crystal', 'Aggregate',
+                               'Wet Snow', 'Vert Ice', 'LD Graup',
+                               'HD Graup', 'Hail', 'Big Drop'])
         cb.ax.set_ylabel('')
         cb.ax.tick_params(length=0)
         return cb

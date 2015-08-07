@@ -4,29 +4,29 @@ This is an object-oriented Python module that facilitates precipitation retrieva
 
 DualPol Installation
 --------------------
-DualPol works under Python 2.x on most Mac/Linux setups. Windows installation is currently untested.
-
+DualPol works under Python 2.7  and 3.4 on most Mac/Linux setups. Windows installation and other Python versions are currently untested.
+<p>
 Put dualpol.py in your PYTHONPATH.
-
-The following dependencies need to be installed first:
-A robust version of Python 2.x w/ most standard scientific packages (e.g., numpy, matplotlib, pandas, etc.) - Get one for free here: https://store.continuum.io/cshop/anaconda/
-The Python Atmospheric Radiation Measurement (ARM) Radar Toolkit (Py-ART; https://github.com/ARM-DOE/pyart)
-CSU_RadarTools (https://github.com/CSU-Radarmet/CSU_RadarTools)
-SkewT (https://pypi.python.org/pypi/SkewT) - an older GitHub version can be found here: https://github.com/tjlang/SkewT
-
-Specific import calls in the DualPol source code:
-import numpy as np
-import warnings
-import pyart
-import matplotlib.colors as colors
-from pyart.io.common import radar_coords_to_cart
-from skewt import SkewT
-from csu_radartools import (csu_fhc, csu_liquid_ice_mass, csu_blended_rain,
-                            csu_dsd, csu_kdp)
-
+<p>
+The following dependencies need to be installed first:<br>
+A robust version of Python 2.7  or 3.4 w/ most standard scientific packages (e.g., numpy, matplotlib, pandas, etc.) - Get one for free here: https://store.continuum.io/cshop/anaconda/<br>
+The Python Atmospheric Radiation Measurement (ARM) Radar Toolkit (Py-ART; https://github.com/ARM-DOE/pyart)<br>
+CSU_RadarTools (https://github.com/CSU-Radarmet/CSU_RadarTools) - a Python 3 version can be found here: https://github.com/tjlang/CSU_RadarTools<br>
+SkewT (https://pypi.python.org/pypi/SkewT) - a Python 3 version can be found here: https://github.com/tjlang/SkewT<br>
+<p>
+Specific import calls in the DualPol source code:<br>
+import numpy as np<br>
+import warnings<br>
+import pyart<br>
+import matplotlib.colors as colors<br>
+from pyart.io.common import radar_coords_to_cart<br>
+from skewt import SkewT<br>
+from csu_radartools import (csu_fhc, csu_liquid_ice_mass, csu_blended_rain,<br>
+                            csu_dsd, csu_kdp)<br>
+<p>
 Using DualPol
 -------------
 To access everything:
 import dualpol
-
-A demonstration notebook is under construction.
+<p>
+A demonstration notebook is in the notebookd directory.
