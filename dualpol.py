@@ -2,9 +2,9 @@
 Title/Version
 -------------
 Python Interface to Dual-Pol Radar Algorithms (DualPol)
-DualPol v0.8
+DualPol v0.9
 Developed & tested with Python 2.7 and 3.4
-Last changed 08/07/2015
+Last changed 09/02/2015
 
 
 Author
@@ -32,11 +32,15 @@ Notes
 -----
 Dependencies: numpy, pyart, warnings, skewt, csu_radartools, matplotlib
 Python 3 compliant SkewT here: https://github.com/tjlang/SkewT
-Python 3 CSU_RadarTools here: https://github.com/tjlang/CSU_RadarTools
 
 
 Change Log
 ----------
+v0.9 Major Changes (09/02/15):
+1. Added QC capabilities, including filters for insects, high SDP, and speckles.
+   These are based on the csu_radartools.csu_misc module. QC is performed prior
+   to all retrievals, except for KDP calculations.
+
 v0.8 Major Changes (08/07/15):
 1. Now supports Python 3.4 and 2.7. Other versions untested.
 
@@ -76,23 +80,29 @@ import matplotlib.colors as colors
 from pyart.io.common import radar_coords_to_cart
 from skewt import SkewT
 from csu_radartools import (csu_fhc, csu_liquid_ice_mass, csu_blended_rain,
-                            csu_dsd, csu_kdp)
+                            csu_dsd, csu_kdp, csu_misc)
 
+VERSION = '0.9'
 RNG_MULT = 1000.0
 DEFAULT_WEIGHTS = csu_fhc.DEFAULT_WEIGHTS
 BAD = -32768
-DEFAULT_SDP = 12
+DEFAULT_SDP = 12.0
+DEFAULT_DZ_RANGE = csu_misc.DEFAULT_DZ_RANGE
+DEFAULT_DR_THRESH = csu_misc.DEFAULT_DR_THRESH
 
 #####################################
 
 DEFAULT_KW = {'dz': 'DZ', 'dr': 'DR', 'dp': None, 'rh': 'RH',
               'kd': None, 'ld': None, 'sounding': None,
               'verbose': False, 'thresh_sdp': DEFAULT_SDP, 'fhc_T_factor': 1,
-              'fhc_weights': DEFAULT_WEIGHTS, 'fhc_name': 'FH', 'band': 'S',
+              'fhc_weights': DEFAULT_WEIGHTS, 'name_fhc': 'FH', 'band': 'S',
               'fhc_method': 'hybrid', 'kdp_method': 'CSU', 'bad': BAD,
               'use_temp': True, 'ice_flag': False, 'dsd_flag': True,
               'fhc_flag': True, 'rain_method': 'hidro', 'precip_flag': True,
-              'liquid_ice_flag': True, 'winter': False, 'gs': 150.0}
+              'liquid_ice_flag': True, 'winter': False, 'gs': 150.0,
+              'qc_flag': False, 'kdp_window': 3.0,
+              'dz_range': DEFAULT_DZ_RANGE, 'name_sdp': 'SDP_CSU',
+              'thresh_dr': DEFAULT_DR_THRESH, 'speckle': 4}
 
 kwargs = np.copy(DEFAULT_KW)
 
@@ -112,7 +122,7 @@ class DualPolRetrieval(object):
     new fields based on what the user wanted DualPolRetrieval to do.
 
     New fields that can be in DualPolRetrieval.radar.fields:
-    'FH' (or whatever user provided in fhc_name kwarg) = HID
+    'FH' (or whatever user provided in name_fhc kwarg) = HID
     'FI' = Ice Fraction
     'ZDP' = Difference Reflectivity
     'KDP_CSU' = KDP as calculated by CSU_RadarTools
@@ -153,7 +163,7 @@ class DualPolRetrieval(object):
         fhc_T_factor = Extra weighting on T to be used in HID calculations
         fhc_weights = Weights for variables in HID. Dictionary form, like so:
             {'DZ': 1.5, 'DR': 0.8, 'KD': 1.0, 'RH': 0.8, 'LD': 0.5, 'T': 0.4}
-        fhc_name = Name to give HID field once calculated
+        name_fhc = Name to give HID field once calculated
         fhc_method = 'hybrid' or 'linear' methods; hybrid preferred
         kdp_method = 'CSU' currently supported
         bad = Value to provide bad data
@@ -170,6 +180,20 @@ class DualPolRetrieval(object):
         liquid_ice_flag = Set to False to not calculate liquid/ice mass
         gs = Gate spacing of the radar (meters). Only used if KDP is calculated
              using CSU_RadarTools.
+        kdp_window = Window length (in km) used as basis for PHIDP filtering.
+                     Only used if KDP is calculated using CSU_RadarTools.
+        name_sdp = Name of field holding (or that will hold) the SDP data.
+        qc_flag = Set to true to filter the data for insects, high SDP
+                  (set by thresh_sdp keyword), and speckles. Will permanently
+                  change the reflectivity field's mask, and by extension affect
+                  all retrieved fields' masks.
+        dz_range = Used by the insect filter. A list of 2-element tuples.
+                   Within each DZ range represented by a tuple, the ZDR
+                   threshold in dr_thresh (see below) will be applied.
+        thresh_dr = List of thresholds on ZDR to be applied within a given
+                    element of dz_range (see above).
+        speckle = Number of contiguous gates or less for an element to be
+                  considered a speckle.
         """
         # Set radar fields
         kwargs = check_kwargs(kwargs, DEFAULT_KW)
@@ -187,6 +211,8 @@ class DualPolRetrieval(object):
         self.bad = kwargs['bad']
         self.thresh_sdp = kwargs['thresh_sdp']
         self.gs = kwargs['gs']
+        self.name_sdp = kwargs['name_sdp']
+        self.kdp_window = kwargs['kdp_window']
         flag = self.do_name_check()
         if not flag:
             return
@@ -197,9 +223,20 @@ class DualPolRetrieval(object):
         self.get_sounding(kwargs['sounding'])
         self.winter_flag = kwargs['winter']
 
+        # Do QC
+        if kwargs['qc_flag']:
+            if self.verbose:
+                print('Performing QC')
+            self.dz_range = kwargs['dz_range']
+            self.dr_thresh = kwargs['thresh_dr']
+            self.speckle = kwargs['speckle']
+            self.do_qc()
+
         # Do FHC
-        self.name_fhc = kwargs['fhc_name']
+        self.name_fhc = kwargs['name_fhc']
         if kwargs['fhc_flag']:
+            if self.verbose:
+                print('Performing FHC')
             self.fhc_weights = kwargs['fhc_weights']
             self.fhc_method = kwargs['fhc_method']
             self.band = kwargs['band']
@@ -207,11 +244,17 @@ class DualPolRetrieval(object):
 
         # Other precip retrievals
         if kwargs['precip_flag']:
+            if self.verbose:
+                print('Performing precip rate calculations')
             self.get_precip_rate(ice_flag=kwargs['ice_flag'],
                                  rain_method=kwargs['rain_method'])
         if kwargs['dsd_flag']:
+            if self.verbose:
+                print('Performing DSD calculations')
             self.get_dsd()
         if kwargs['liquid_ice_flag']:
+            if self.verbose:
+                print('Performing mass calculations')
             self.get_liquid_and_frozen_mass()
 
     def do_radar_check(self, radar):
@@ -317,7 +360,6 @@ class DualPolRetrieval(object):
             fdp, units='deg', standard_name='Filtered Differential Phase',
             field_name=self.name_fdp,
             long_name='Filtered Differential Phase')
-        self.name_sdp = 'SDP_'+self.kdp_method
         self.add_field_to_radar_object(
             sdp, units='deg', standard_name='Std Dev Differential Phase',
             field_name=self.name_sdp,
@@ -363,6 +405,29 @@ class DualPolRetrieval(object):
                     print('Sounding in wrong data format')
                     self.T_flag = False
         self.interpolate_sounding_to_radar()
+
+    def do_qc(self):
+        if self.name_sdp not in self.radar.fields:
+            print('Cannot do QC, no SDP field identified')
+            return
+        if self.verbose:
+            print('Masking insects and high SDP,', end=' ')
+        dz = self.extract_unmasked_data(self.name_dz)
+        dr = self.extract_unmasked_data(self.name_dr)
+        sdp = self.extract_unmasked_data(self.name_sdp)
+        insect_mask = csu_misc.insect_filter(
+            dz, dr, dz_range=self.dz_range, dr_thresh=self.dr_thresh,
+            bad=self.bad)
+        sdp_mask = csu_misc.differential_phase_filter(
+            sdp, thresh_sdp=self.thresh_sdp)
+        new_mask = np.logical_or(insect_mask, sdp_mask)
+        dz_qc = 1.0 * dz
+        dz_qc[new_mask] = self.bad
+        if self.verbose:
+            print('Despeckling')
+        mask_ds = csu_misc.despeckle(dz_qc, bad=self.bad, ngates=self.speckle)
+        final_mask = np.logical_or(new_mask, mask_ds)
+        setattr(self.radar.fields[self.name_dz]['data'], 'mask', final_mask)
 
     def get_hid(self):
         """Calculate hydrometeror ID, add to radar object."""
