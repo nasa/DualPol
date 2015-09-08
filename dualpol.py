@@ -4,7 +4,7 @@ Title/Version
 Python Interface to Dual-Pol Radar Algorithms (DualPol)
 DualPol v0.9
 Developed & tested with Python 2.7 and 3.4
-Last changed 09/02/2015
+Last changed 09/04/2015
 
 
 Author
@@ -36,10 +36,12 @@ Python 3 compliant SkewT here: https://github.com/tjlang/SkewT
 
 Change Log
 ----------
-v0.9 Major Changes (09/02/15):
+v0.9 Major Changes (09/04/15):
 1. Added QC capabilities, including filters for insects, high SDP, and speckles.
    These are based on the csu_radartools.csu_misc module. QC is performed prior
    to all retrievals, except for KDP calculations.
+2. Added kdp_window keyword to DualPolRetrieval, to allow user to vary distance
+   for window used in phase filtering and KDP calculation using csu_radartools.
 
 v0.8 Major Changes (08/07/15):
 1. Now supports Python 3.4 and 2.7. Other versions untested.
@@ -354,8 +356,9 @@ class DualPolRetrieval(object):
         rng2d, az2d = np.meshgrid(rng, az)
         kdp, fdp, sdp = \
             csu_kdp.calc_kdp_bringi(dp=dp, dz=dz, rng=rng2d, gs=self.gs,
-                                    thsd=self.thresh_sdp, bad=self.bad)
-        self.name_fdp = 'FDP_'+self.kdp_method
+                                    thsd=self.thresh_sdp, bad=self.bad,
+                                    window=self.kdp_window)
+        self.name_fdp = 'FDP_' + self.kdp_method
         self.add_field_to_radar_object(
             fdp, units='deg', standard_name='Filtered Differential Phase',
             field_name=self.name_fdp,
