@@ -36,12 +36,13 @@ Python 3 compliant SkewT here: https://github.com/tjlang/SkewT
 
 Change Log
 ----------
-v0.9 Major Changes (09/04/15):
+v0.9 Major Changes (09/25/15):
 1. Added QC capabilities, including filters for insects, high SDP, and speckles.
    These are based on the csu_radartools.csu_misc module. QC is performed prior
    to all retrievals, except for KDP calculations.
 2. Added kdp_window keyword to DualPolRetrieval, to allow user to vary distance
    for window used in phase filtering and KDP calculation using csu_radartools.
+3. Added capability for putting temperature field in radar object.
 
 v0.8 Major Changes (08/07/15):
 1. Now supports Python 3.4 and 2.7. Other versions untested.
@@ -549,6 +550,9 @@ class DualPolRetrieval(object):
             if self.verbose:
                 print('Trying to get radar_T')
             self.radar_T = np.reshape(rad_T1d, shape)
+            self.add_field_to_radar_object(
+                self.radar_T, field_name='temperature', units='deg C',
+                long_name='Temperature', standard_name='Temperature')
 
     def check_sounding_for_montonic(self):
         """
