@@ -5,3 +5,6 @@ __pycache__
 dist
 old/*
 release/*
+notebooks/20140605
+despeckling_improvements.ipynb
+notebooks/.ipynb*
