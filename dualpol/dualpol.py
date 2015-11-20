@@ -2,9 +2,9 @@
 Title/Version
 -------------
 Python Interface to Dual-Pol Radar Algorithms (DualPol)
-DualPol v0.9
+DualPol v1.0
 Developed & tested with Python 2.7 and 3.4
-Last changed 09/04/2015
+Last changed 11/20/2015
 
 
 Author
@@ -36,6 +36,9 @@ Python 3 compliant SkewT here: https://github.com/tjlang/SkewT
 
 Change Log
 ----------
+v1.0 Major Changes (11/20/15):
+1. Made an installable package
+
 v0.9 Major Changes (09/25/15):
 1. Added QC capabilities, including filters for insects, high SDP, and speckles.
    These are based on the csu_radartools.csu_misc module. QC is performed prior
@@ -78,6 +81,7 @@ v0.1 Functionality(01/26/15):
 from __future__ import print_function
 import numpy as np
 import warnings
+import time
 import pyart
 import matplotlib.colors as colors
 from pyart.io.common import radar_coords_to_cart
@@ -85,7 +89,7 @@ from skewt import SkewT
 from csu_radartools import (csu_fhc, csu_liquid_ice_mass, csu_blended_rain,
                             csu_dsd, csu_kdp, csu_misc)
 
-VERSION = '0.9'
+VERSION = '1.0'
 RNG_MULT = 1000.0
 DEFAULT_WEIGHTS = csu_fhc.DEFAULT_WEIGHTS
 BAD = -32768
@@ -355,10 +359,14 @@ class DualPolRetrieval(object):
         rng = self.radar.range['data'] / RNG_MULT
         az = self.radar.azimuth['data']
         rng2d, az2d = np.meshgrid(rng, az)
+#        print('debug calling csu_kdp')
+        bt = time.time()
         kdp, fdp, sdp = \
             csu_kdp.calc_kdp_bringi(dp=dp, dz=dz, rng=rng2d, gs=self.gs,
                                     thsd=self.thresh_sdp, bad=self.bad,
                                     window=self.kdp_window)
+        print(time.time()-bt, 'seconds to run csu_kdp')
+#        print('debug dualpol kdp', np.shape(kdp))
         self.name_fdp = 'FDP_' + self.kdp_method
         self.add_field_to_radar_object(
             fdp, units='deg', standard_name='Filtered Differential Phase',
@@ -444,6 +452,7 @@ class DualPolRetrieval(object):
         else:
             ld = None
         if not self.winter_flag:
+            bt = time.time()
             scores = csu_fhc.csu_fhc_summer(
                 dz=dz, zdr=dr, rho=rh, kdp=kd,
                 ldr=ld, use_temp=self.T_flag, band=self.band,
@@ -452,6 +461,7 @@ class DualPolRetrieval(object):
                 weights=self.fhc_weights)
             fh = np.argmax(scores, axis=0) + 1
             self.add_field_to_radar_object(fh, field_name=self.name_fhc)
+            print(time.time()-bt, 'seconds to do FHC')
         else:
             print('Winter HID not enabled yet, sorry!')
 
@@ -540,7 +550,7 @@ class DualPolRetrieval(object):
 
     def interpolate_sounding_to_radar(self):
         """Takes sounding data and interpolates it to every radar gate."""
-        self.radar_z = get_z_from_radar(self.radar)
+        xx, yy, self.radar_z = get_xyz_from_radar(self.radar)
         self.radar_T = None
         self.check_sounding_for_montonic()
         if self.T_flag:
@@ -624,7 +634,7 @@ class HidColors(object):
 ################################
 
 
-def get_z_from_radar(radar):
+def get_xyz_from_radar(radar):
     """Input radar object, return z from radar (km, 2D)"""
     azimuth_1D = radar.azimuth['data']
     elevation_1D = radar.elevation['data']
@@ -632,7 +642,7 @@ def get_z_from_radar(radar):
     sr_2d, az_2d = np.meshgrid(srange_1D, azimuth_1D)
     el_2d = np.meshgrid(srange_1D, elevation_1D)[1]
     xx, yy, zz = radar_coords_to_cart(sr_2d/RNG_MULT, az_2d, el_2d)
-    return zz + radar.altitude['data']
+    return xx, yy, zz + radar.altitude['data']
 
 
 def check_kwargs(kwargs, default_kw):

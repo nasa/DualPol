@@ -1,0 +1,7 @@
+*.pyc
+build/*
+DualPol.egg-info
+__pycache__
+dist
+old/*
+release/*
