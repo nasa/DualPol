@@ -1,6 +1,9 @@
-Title
------
+Title/Version
+-------------
 Python Interface to Dual-Pol Radar Algorithms (DualPol)
+DualPol v1.0
+Developed & tested with Python 2.7 and 3.4
+Last changed 11/20/2015
 
 
 Author
@@ -18,6 +21,12 @@ retrievals (e.g., hydrometeor type, precipitation rate, precipitation mass,
 particle size distribution information) from polarimetric radar data. It
 leverages existing open source radar software packages to perform all-in-one
 retrievals that are then easily visualized or saved using existing software.
+
+To access this module, in the main DualPol source directory:
+python setup.py install
+
+Then in your program:
+import dualpol
 
 
 Notes

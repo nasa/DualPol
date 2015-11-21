@@ -1,83 +1,17 @@
 """
-Title/Version
--------------
-Python Interface to Dual-Pol Radar Algorithms (DualPol)
-DualPol v1.0
-Developed & tested with Python 2.7 and 3.4
-Last changed 11/20/2015
+This is the main source code for DualPol.
 
+Key classes:
+- DualPolRetrieval
+- HidColors
+- _FhcVars
 
-Author
-------
-Timothy Lang
-NASA MSFC
-timothy.j.lang@nasa.gov
-(256) 961-7861
-
-
-Overview
---------
-This is an object-oriented Python module that facilitates precipitation
-retrievals (e.g., hydrometeor type, precipitation rate, precipitation mass,
-particle size distribution information) from polarimetric radar data. It
-leverages existing open source radar software packages to perform all-in-one
-retrievals that are then easily visualized or saved using existing software.
-
-To access this module, add the following to your program and then make sure
-the path to this script is in your PYTHONPATH:
-import dualpol
-
-
-Notes
------
-Dependencies: numpy, pyart, warnings, skewt, csu_radartools, matplotlib
-Python 3 compliant SkewT here: https://github.com/tjlang/SkewT
-
-
-Change Log
-----------
-v1.0 Major Changes (11/20/15):
-1. Made an installable package
-
-v0.9 Major Changes (09/25/15):
-1. Added QC capabilities, including filters for insects, high SDP, and speckles.
-   These are based on the csu_radartools.csu_misc module. QC is performed prior
-   to all retrievals, except for KDP calculations.
-2. Added kdp_window keyword to DualPolRetrieval, to allow user to vary distance
-   for window used in phase filtering and KDP calculation using csu_radartools.
-3. Added capability for putting temperature field in radar object.
-
-v0.8 Major Changes (08/07/15):
-1. Now supports Python 3.4 and 2.7. Other versions untested.
-
-v0.7 Major Changes (07/02/15):
-1. Made code pep8 compliant
-
-v0.6 Major Changes (05/21/15):
-1. KDP calculation accepts gate spacing keyword (gs).
-2. Adjusted sounding read to work with latest version of skewt
-3. More info added to docstrings
-
-v0.5 Major Changes (03/13/15):
-1. KDP calculation implemented.
-2. Moved keyword arguments to separate dictionary (kwargs) and implemented
-   check_kwargs() function to process them.
-
-v0.4 Major Changes (03/05/15):
-1. DSD calculations implemented.
-2. Project renamed to DualPol from RadBro.
-
-v0.3 Major Changes (02/20/15):
-1. Rainfall rate implemented
-
-v0.2 Major Changes (01/27/15):
-1. Ice/liquid mass calculations implemented.
-
-v0.1 Functionality(01/26/15):
-1. Summer HID calculations implemented.
-2. Support for sounding import.
+Key functions:
+- get_xyz_from_radar
+- check_kwargs
 
 """
+
 from __future__ import print_function
 import numpy as np
 import warnings
@@ -208,18 +142,7 @@ class DualPolRetrieval(object):
         flag = self.do_radar_check(radar)
         if not flag:
             return
-        self.name_dz = kwargs['dz']
-        self.name_dr = kwargs['dr']
-        self.name_kd = kwargs['kd']
-        self.name_rh = kwargs['rh']
-        self.name_ld = kwargs['ld']
-        self.name_dp = kwargs['dp']
-        self.kdp_method = kwargs['kdp_method']
-        self.bad = kwargs['bad']
-        self.thresh_sdp = kwargs['thresh_sdp']
-        self.gs = kwargs['gs']
-        self.name_sdp = kwargs['name_sdp']
-        self.kdp_window = kwargs['kdp_window']
+        self._populate_attributes(kwargs)
         flag = self.do_name_check()
         if not flag:
             return
@@ -443,25 +366,31 @@ class DualPolRetrieval(object):
 
     def get_hid(self):
         """Calculate hydrometeror ID, add to radar object."""
-        dz = self.radar.fields[self.name_dz]['data']
-        dr = self.radar.fields[self.name_dr]['data']
-        kd = self.radar.fields[self.name_kd]['data']
-        rh = self.radar.fields[self.name_rh]['data']
-        if self.name_ld is not None:
-            ld = self.radar.fields[self.name_ld]['data']
-        else:
-            ld = None
+        _fhv = _FhcVars(self)
         if not self.winter_flag:
             bt = time.time()
-            scores = csu_fhc.csu_fhc_summer(
-                dz=dz, zdr=dr, rho=rh, kdp=kd,
-                ldr=ld, use_temp=self.T_flag, band=self.band,
-                method=self.fhc_method, T=self.radar_T,
-                verbose=self.verbose, temp_factor=self.T_factor,
-                weights=self.fhc_weights)
-            fh = np.argmax(scores, axis=0) + 1
-            self.add_field_to_radar_object(fh, field_name=self.name_fhc)
-            print(time.time()-bt, 'seconds to do FHC')
+            # Cut down on processing missing/bad data
+            good = _fhv.dz != self.bad
+            if self.name_ld is not None:
+                _fhv.ld = _fhv.ld[good]
+            if _fhv.tt is not None:
+                _fhv.tt = _fhv.tt[good]
+            # Only run FHC if the scope is not completely blank
+            if np.size(_fhv.dz[good]) > 0:
+                scores = csu_fhc.csu_fhc_summer(
+                    dz=_fhv.dz[good], zdr=_fhv.dr[good], rho=_fhv.rh[good],
+                    kdp=_fhv.kd[good], ldr=_fhv.ld, use_temp=self.T_flag,
+                    band=self.band, method=self.fhc_method, T=_fhv.tt,
+                    verbose=self.verbose, temp_factor=self.T_factor,
+                    weights=self.fhc_weights)
+                # Create and populate the FHC field
+                fh = np.zeros_like(_fhv.dz) + self.bad
+                fh[good] = np.argmax(scores, axis=0) + 1
+                fh = np.reshape(fh, _fhv.shp)
+                self.add_field_to_radar_object(fh, field_name=self.name_fhc)
+                print(time.time()-bt, 'seconds to do FHC')
+            else:
+                print('No good data for FHC, not performed')
         else:
             print('Winter HID not enabled yet, sorry!')
 
@@ -584,6 +513,61 @@ class DualPolRetrieval(object):
                         dummy_T.append(self.snd_T[i])
             self.snd_z = np.array(dummy_z)
             self.snd_T = np.array(dummy_T)
+
+    def _populate_attributes(self, kwargs):
+        """
+        This internal method declutters self.__init__()
+        """
+        self.name_dz = kwargs['dz']
+        self.name_dr = kwargs['dr']
+        self.name_kd = kwargs['kd']
+        self.name_rh = kwargs['rh']
+        self.name_ld = kwargs['ld']
+        self.name_dp = kwargs['dp']
+        self.kdp_method = kwargs['kdp_method']
+        self.bad = kwargs['bad']
+        self.thresh_sdp = kwargs['thresh_sdp']
+        self.gs = kwargs['gs']
+        self.name_sdp = kwargs['name_sdp']
+        self.kdp_window = kwargs['kdp_window']
+
+################################
+
+
+class _FhcVars(object):
+
+    """
+    Internal class for parsing and prepping the radar variables for FHC.
+    """
+
+    def __init__(self, dpret):
+        """
+        dpret = DualPolRetrieval object
+        """
+        self.grab_vars(dpret)
+
+    def grab_vars(self, dpret):
+        self.dz = dpret.radar.fields[dpret.name_dz]['data'].filled(
+            fill_value=dpret.bad)
+        self.shp = np.shape(self.dz)
+        self.dz = self.dz.flatten()
+        self.dr = dpret.radar.fields[dpret.name_dr]['data'].filled(
+            fill_value=dpret.bad).flatten()
+        self.kd = dpret.radar.fields[dpret.name_kd]['data'].filled(
+            fill_value=dpret.bad).flatten()
+        self.rh = dpret.radar.fields[dpret.name_rh]['data'].filled(
+            fill_value=dpret.bad).flatten()
+        # LDR is optional
+        if dpret.name_ld is not None:
+            self.ld = dpret.radar.fields[dpret.name_ld]['data'].filled(
+                fill_value=dpret.bad).flatten()
+        else:
+            self.ld = None
+        # Temperature is optional
+        if dpret.radar_T is not None:
+            self.tt = dpret.radar_T.flatten()
+        else:
+            self.tt = None
 
 ################################
 
