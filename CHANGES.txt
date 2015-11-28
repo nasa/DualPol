@@ -1,9 +1,11 @@
 Change Log
 ----------
-v1.0 Major Changes (11/20/15):
+v1.0 Major Changes (11/27/15):
 1. Made an installable package.
 2. Added _FhcVars class to clean up FHC routines.
 3. Optimized FHC processing by reducing arrays before making csu_fhc call.
+4. Added common sub-module with radar_coords_to_cart function that Py-ART
+   just removed.
 
 v0.9 Major Changes (09/25/15):
 1. Added QC capabilities, including filters for insects, high SDP, & speckles.
