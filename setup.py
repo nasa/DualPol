@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name='DualPol',
-    version='1.0',
+    version='1.0.1',
     author='Timothy Lang',
     author_email='timothy.j.lang@nasa.gov',
     packages=['dualpol', ],
