@@ -1,5 +1,9 @@
 Change Log
 ----------
+v1.0.1 Major Changes (12/08/15):
+1. Added std_gates keyword to DualPolRetrieval that allows the user to adjust
+   the number of gates used to calculate stddev of diff phase. Default still 11.
+
 v1.0 Major Changes (11/27/15):
 1. Made an installable package.
 2. Added _FhcVars class to clean up FHC routines.

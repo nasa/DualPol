@@ -23,7 +23,7 @@ from skewt import SkewT
 from csu_radartools import (csu_fhc, csu_liquid_ice_mass, csu_blended_rain,
                             csu_dsd, csu_kdp, csu_misc)
 
-VERSION = '1.0'
+VERSION = '1.0.1'
 RNG_MULT = 1000.0
 DEFAULT_WEIGHTS = csu_fhc.DEFAULT_WEIGHTS
 BAD = -32768
@@ -41,7 +41,7 @@ DEFAULT_KW = {'dz': 'DZ', 'dr': 'DR', 'dp': None, 'rh': 'RH',
               'use_temp': True, 'ice_flag': False, 'dsd_flag': True,
               'fhc_flag': True, 'rain_method': 'hidro', 'precip_flag': True,
               'liquid_ice_flag': True, 'winter': False, 'gs': 150.0,
-              'qc_flag': False, 'kdp_window': 3.0,
+              'qc_flag': False, 'kdp_window': 3.0, 'std_gate': 11,
               'dz_range': DEFAULT_DZ_RANGE, 'name_sdp': 'SDP_CSU',
               'thresh_dr': DEFAULT_DR_THRESH, 'speckle': 4}
 
@@ -135,6 +135,8 @@ class DualPolRetrieval(object):
                     element of dz_range (see above).
         speckle = Number of contiguous gates or less for an element to be
                   considered a speckle.
+        std_gate = Number of gates for standard deviation of phase calculation.
+                   Must be odd or csu_kdp will set it to the default value.
         """
         # Set radar fields
         kwargs = check_kwargs(kwargs, DEFAULT_KW)
@@ -287,7 +289,8 @@ class DualPolRetrieval(object):
         kdp, fdp, sdp = \
             csu_kdp.calc_kdp_bringi(dp=dp, dz=dz, rng=rng2d, gs=self.gs,
                                     thsd=self.thresh_sdp, bad=self.bad,
-                                    window=self.kdp_window)
+                                    window=self.kdp_window,
+                                    std_gate=self.std_gate)
         print(time.time()-bt, 'seconds to run csu_kdp')
 #        print('debug dualpol kdp', np.shape(kdp))
         self.name_fdp = 'FDP_' + self.kdp_method
@@ -530,6 +533,7 @@ class DualPolRetrieval(object):
         self.gs = kwargs['gs']
         self.name_sdp = kwargs['name_sdp']
         self.kdp_window = kwargs['kdp_window']
+        self.std_gate = kwargs['std_gate']
 
 ################################
 
