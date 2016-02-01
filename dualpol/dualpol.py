@@ -551,20 +551,38 @@ class _FhcVars(object):
         self.grab_vars(dpret)
 
     def grab_vars(self, dpret):
-        self.dz = dpret.radar.fields[dpret.name_dz]['data'].filled(
-            fill_value=dpret.bad)
+        """
+        Added try statements in case fields are not masked arrays
+        """
+        try:
+            self.dz = dpret.radar.fields[dpret.name_dz]['data'].filled(
+                fill_value=dpret.bad)
+        except AttributeError:
+            self.dz = dpret.radar.fields[dpret.name_dz]['data']
         self.shp = np.shape(self.dz)
         self.dz = self.dz.flatten()
-        self.dr = dpret.radar.fields[dpret.name_dr]['data'].filled(
-            fill_value=dpret.bad).flatten()
-        self.kd = dpret.radar.fields[dpret.name_kd]['data'].filled(
-            fill_value=dpret.bad).flatten()
-        self.rh = dpret.radar.fields[dpret.name_rh]['data'].filled(
-            fill_value=dpret.bad).flatten()
+        try:
+            self.dr = dpret.radar.fields[dpret.name_dr]['data'].filled(
+                fill_value=dpret.bad).flatten()
+        except AttributeError:
+            self.dr = dpret.radar.fields[dpret.name_dr]['data'].flatten()
+        try:
+            self.kd = dpret.radar.fields[dpret.name_kd]['data'].filled(
+                fill_value=dpret.bad).flatten()
+        except:
+            self.kd = dpret.radar.fields[dpret.name_kd]['data'].flatten()
+        try:
+            self.rh = dpret.radar.fields[dpret.name_rh]['data'].filled(
+                fill_value=dpret.bad).flatten()
+        except:
+            self.rh = dpret.radar.fields[dpret.name_rh]['data'].flatten()
         # LDR is optional
         if dpret.name_ld is not None:
-            self.ld = dpret.radar.fields[dpret.name_ld]['data'].filled(
-                fill_value=dpret.bad).flatten()
+            try:
+                self.ld = dpret.radar.fields[dpret.name_ld]['data'].filled(
+                    fill_value=dpret.bad).flatten()
+            except AttributeError:
+                self.ld = dpret.radar.fields[dpret.name_ld]['data'].flatten()
         else:
             self.ld = None
         # Temperature is optional
@@ -630,7 +648,8 @@ def get_xyz_from_radar(radar):
     sr_2d, az_2d = np.meshgrid(srange_1D, azimuth_1D)
     el_2d = np.meshgrid(srange_1D, elevation_1D)[1]
     xx, yy, zz = radar_coords_to_cart(sr_2d/RNG_MULT, az_2d, el_2d)
-    return xx, yy, zz + radar.altitude['data']
+    # Using median value for now to avoid error with broadcasting diff shapes
+    return xx, yy, zz + np.median(radar.altitude['data'])
 
 
 def check_kwargs(kwargs, default_kw):
