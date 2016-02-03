@@ -468,11 +468,14 @@ class DualPolRetrieval(object):
         Adds a newly created field to the Py-ART radar object.
         """
         masked_field = np.ma.asanyarray(field)
-        fill_value = self.bad
+        masked_field.mask = masked_field == self.bad
         if hasattr(self.radar.fields[self.name_dz]['data'], 'mask'):
-            setattr(masked_field, 'mask',
-                    self.radar.fields[self.name_dz]['data'].mask)
-            fill_value = self.radar.fields[self.name_dz]['_FillValue']
+            masked_field.mask = np.logical_or(
+                masked_field.mask, self.radar.fields[self.name_dz]['data'].mask)
+            try:
+                fill_value = self.radar.fields[self.name_dz]['_FillValue']
+            except KeyError:
+                fill_value = self.bad
         field_dict = {'data': masked_field,
                       'units': units,
                       'long_name': long_name,
