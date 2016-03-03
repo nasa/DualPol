@@ -353,11 +353,15 @@ class DualPolRetrieval(object):
         dz = self.extract_unmasked_data(self.name_dz)
         dr = self.extract_unmasked_data(self.name_dr)
         sdp = self.extract_unmasked_data(self.name_sdp)
+        dp = self.extract_unmasked_data(self.name_dp)
+        dz_mask = dz == self.bad
         insect_mask = csu_misc.insect_filter(
             dz, dr, dz_range=self.dz_range, dr_thresh=self.dr_thresh,
-            bad=self.bad)
+            bad=self.bad, mask=dz_mask)
         sdp_mask = csu_misc.differential_phase_filter(
             sdp, thresh_sdp=self.thresh_sdp)
+        dp_cond = dp != self.bad
+        sdp_mask = np.logical_and(sdp_mask, dp_cond)
         new_mask = np.logical_or(insect_mask, sdp_mask)
         dz_qc = 1.0 * dz
         dz_qc[new_mask] = self.bad
