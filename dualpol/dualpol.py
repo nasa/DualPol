@@ -23,12 +23,14 @@ from skewt import SkewT
 from csu_radartools import (csu_fhc, csu_liquid_ice_mass, csu_blended_rain,
                             csu_dsd, csu_kdp, csu_misc)
 
-VERSION = '1.0.1'
+VERSION = '1.0.2'
 RNG_MULT = 1000.0
 DEFAULT_WEIGHTS = csu_fhc.DEFAULT_WEIGHTS
 BAD = -32768
 DEFAULT_SDP = 12.0
 DEFAULT_DZ_RANGE = csu_misc.DEFAULT_DZ_RANGE
+DEFAULT_DZ_THRESH = 38.0
+DEFAULT_KD_THRESH = 0.3
 DEFAULT_DR_THRESH = csu_misc.DEFAULT_DR_THRESH
 
 #####################################
@@ -43,7 +45,8 @@ DEFAULT_KW = {'dz': 'DZ', 'dr': 'DR', 'dp': None, 'rh': 'RH',
               'liquid_ice_flag': True, 'winter': False, 'gs': 150.0,
               'qc_flag': False, 'kdp_window': 3.0, 'std_gate': 11,
               'dz_range': DEFAULT_DZ_RANGE, 'name_sdp': 'SDP_CSU',
-              'thresh_dr': DEFAULT_DR_THRESH, 'speckle': 4}
+              'thresh_dr': DEFAULT_DR_THRESH, 'speckle': 4,
+              'thresh_dz': DEFAULT_DZ_THRESH, 'thresh_kd': DEFAULT_KD_THRESH}
 
 kwargs = np.copy(DEFAULT_KW)
 
@@ -137,6 +140,10 @@ class DualPolRetrieval(object):
                   considered a speckle.
         std_gate = Number of gates for standard deviation of phase calculation.
                    Must be odd or csu_kdp will set it to the default value.
+        thresh_dz = Value of Z that determines logical breakpoints in blended
+                    rainfall calculations.
+        thresh_kd = Value of Kdp that determines logical breakpoints in blended
+                    rainfall calculations.
         """
         # Set radar fields
         kwargs = check_kwargs(kwargs, DEFAULT_KW)
@@ -165,21 +172,22 @@ class DualPolRetrieval(object):
             self.do_qc()
 
         # Do FHC
+        self.band = kwargs['band']
         self.name_fhc = kwargs['name_fhc']
         if kwargs['fhc_flag']:
             if self.verbose:
                 print('Performing FHC')
             self.fhc_weights = kwargs['fhc_weights']
             self.fhc_method = kwargs['fhc_method']
-            self.band = kwargs['band']
             self.get_hid()
 
         # Other precip retrievals
         if kwargs['precip_flag']:
             if self.verbose:
                 print('Performing precip rate calculations')
-            self.get_precip_rate(ice_flag=kwargs['ice_flag'],
-                                 rain_method=kwargs['rain_method'])
+            self.get_precip_rate(
+                ice_flag=kwargs['ice_flag'], rain_method=kwargs['rain_method'],
+                thresh_dz=kwargs['thresh_dz'], thresh_kd=kwargs['thresh_kd'])
         if kwargs['dsd_flag']:
             if self.verbose:
                 print('Performing DSD calculations')
@@ -401,7 +409,9 @@ class DualPolRetrieval(object):
         else:
             print('Winter HID not enabled yet, sorry!')
 
-    def get_precip_rate(self, ice_flag=False, rain_method='hidro'):
+    def get_precip_rate(
+            self, ice_flag=False, rain_method='hidro',
+            thresh_dz=DEFAULT_DZ_THRESH, thresh_kd=DEFAULT_KD_THRESH):
         """Calculate rain rate, add to radar object."""
         dz = self.radar.fields[self.name_dz]['data']
         dr = self.radar.fields[self.name_dr]['data']
@@ -409,15 +419,19 @@ class DualPolRetrieval(object):
         if not self.winter_flag:
             if rain_method == 'hidro':
                 fhc = self.radar.fields[self.name_fhc]['data']
-                rain, method = csu_blended_rain.csu_hidro_rain(dz=dz, zdr=dr,
-                                                               kdp=kd, fhc=fhc)
+                rain, method = csu_blended_rain.csu_hidro_rain(
+                    dz=dz, zdr=dr, kdp=kd, fhc=fhc, band=self.band,
+                    thresh_dz=thresh_dz, thresh_kdp=thresh_kd)
             else:
                 if not ice_flag:
                     rain, method = csu_blended_rain.calc_blended_rain(
-                        dz=dz, zdr=dr, kdp=kd)
+                        dz=dz, zdr=dr, kdp=kd, band=self.band,
+                        thresh_dz=thresh_dz, thresh_kdp=thresh_kd)
                 else:
                     rain, method, zdp, fi = csu_blended_rain.calc_blended_rain(
-                        dz=dz, zdr=dr, kdp=kd, ice_flag=ice_flag)
+                        dz=dz, zdr=dr, kdp=kd, ice_flag=ice_flag,
+                        band=self.band, thresh_dz=thresh_dz,
+                        thresh_kdp=thresh_kd)
                     self.add_field_to_radar_object(
                         zdp, field_name='ZDP', units='dB',
                         long_name='Difference Reflectivity',
@@ -475,7 +489,8 @@ class DualPolRetrieval(object):
         masked_field.mask = masked_field == self.bad
         if hasattr(self.radar.fields[self.name_dz]['data'], 'mask'):
             masked_field.mask = np.logical_or(
-                masked_field.mask, self.radar.fields[self.name_dz]['data'].mask)
+                masked_field.mask,
+                self.radar.fields[self.name_dz]['data'].mask)
             try:
                 fill_value = self.radar.fields[self.name_dz]['_FillValue']
             except KeyError:
