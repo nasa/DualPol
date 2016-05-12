@@ -1,10 +1,13 @@
 Change Log
 ----------
-v1.0.2 Major Changes (05/10/16):
+v1.0.2 Major Changes (05/12/16):
 1. Added support for band, thresh_dz, and thresh_kdp keywords in the
    blended rainfall algorithm calls. See CSU_RadarTools documentation for
    how these affect the blended rainfall logic. Primary effect is reduced
    use of Zdr at non-S bands.
+2. Added support for thresh_zdr keyword (another blended rain breakpoint),
+   as well as the ability to adjust parameters in the different blended rain
+   equations (e.g., a & b in Z = a * R**b or R = a * Kdp**b). 
 
 v1.0.1 Major Changes (12/08/15):
 1. Added std_gates keyword to DualPolRetrieval that allows the user to adjust

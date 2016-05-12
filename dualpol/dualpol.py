@@ -46,7 +46,11 @@ DEFAULT_KW = {'dz': 'DZ', 'dr': 'DR', 'dp': None, 'rh': 'RH',
               'qc_flag': False, 'kdp_window': 3.0, 'std_gate': 11,
               'dz_range': DEFAULT_DZ_RANGE, 'name_sdp': 'SDP_CSU',
               'thresh_dr': DEFAULT_DR_THRESH, 'speckle': 4,
-              'thresh_dz': DEFAULT_DZ_THRESH, 'thresh_kd': DEFAULT_KD_THRESH}
+              'thresh_dz': DEFAULT_DZ_THRESH, 'thresh_kd': DEFAULT_KD_THRESH,
+              'r_kdp_a': 40.5, 'r_kdp_b': 0.85, 'r_z_a': 300.0,
+              'r_z_b': 1.4, 'r_z_zdr_a': 6.7e-3, 'r_z_zdr_b': 0.927,
+              'r_z_zdr_c': -0.343, 'r_kdp_zdr_a': 90.8, 'r_kdp_zdr_b': 0.93,
+              'r_kdp_zdr_c': -0.169, 'thresh_zdr': 0.5}
 
 kwargs = np.copy(DEFAULT_KW)
 
@@ -144,6 +148,12 @@ class DualPolRetrieval(object):
                     rainfall calculations.
         thresh_kd = Value of Kdp that determines logical breakpoints in blended
                     rainfall calculations.
+        thresh_zdr = Value of Zdr that determines logical breaks in blended
+                     rainfall calculations.
+        r_z_a, r_z_b => Z = a * R**b
+        r_kdp_a, r_kdp_b => R = a * kdp**b
+        r_kdp_zdr_a, r_kdp_zdr_b, r_kdp_zdr_c => R = a*kdp**b*10.0**(c*zdr)
+        r_z_zdr_a,r_z_zdr_b,r_z_zdr_c => R = a*linearize(z)**b*10.0**(c*zdr)
         """
         # Set radar fields
         kwargs = check_kwargs(kwargs, DEFAULT_KW)
@@ -185,9 +195,14 @@ class DualPolRetrieval(object):
         if kwargs['precip_flag']:
             if self.verbose:
                 print('Performing precip rate calculations')
+            for key in ['r_kdp_a', 'r_kdp_b', 'r_z_a', 'r_z_b',
+                        'r_z_zdr_a', 'r_z_zdr_b', 'r_z_zdr_c',
+                        'r_kdp_zdr_a', 'r_kdp_zdr_b', 'r_kdp_zdr_c']:
+                setattr(self, key, kwargs[key])
             self.get_precip_rate(
                 ice_flag=kwargs['ice_flag'], rain_method=kwargs['rain_method'],
-                thresh_dz=kwargs['thresh_dz'], thresh_kd=kwargs['thresh_kd'])
+                thresh_dz=kwargs['thresh_dz'], thresh_kd=kwargs['thresh_kd'],
+                thresh_zdr=kwargs['thresh_zdr'])
         if kwargs['dsd_flag']:
             if self.verbose:
                 print('Performing DSD calculations')
@@ -410,7 +425,7 @@ class DualPolRetrieval(object):
             print('Winter HID not enabled yet, sorry!')
 
     def get_precip_rate(
-            self, ice_flag=False, rain_method='hidro',
+            self, ice_flag=False, rain_method='hidro', thresh_zdr=0.5,
             thresh_dz=DEFAULT_DZ_THRESH, thresh_kd=DEFAULT_KD_THRESH):
         """Calculate rain rate, add to radar object."""
         dz = self.radar.fields[self.name_dz]['data']
@@ -421,17 +436,36 @@ class DualPolRetrieval(object):
                 fhc = self.radar.fields[self.name_fhc]['data']
                 rain, method = csu_blended_rain.csu_hidro_rain(
                     dz=dz, zdr=dr, kdp=kd, fhc=fhc, band=self.band,
-                    thresh_dz=thresh_dz, thresh_kdp=thresh_kd)
+                    thresh_dz=thresh_dz, thresh_kdp=thresh_kd,
+                    thresh_zdr=thresh_zdr, r_z_a=self.r_z_a, r_z_b=self.r_z_b,
+                    r_kdp_a=self.r_kdp_a, r_kdp_b=self.r_kdp_b,
+                    r_z_zdr_a=self.r_z_zdr_a, r_z_zdr_b=self.r_z_zdr_b,
+                    r_z_zdr_c=self.r_z_zdr_c, r_kdp_zdr_a=self.r_kdp_zdr_a,
+                    r_kdp_zdr_b=self.r_kdp_zdr_b, r_kdp_zdr_c=self.r_kdp_zdr_c)
             else:
                 if not ice_flag:
                     rain, method = csu_blended_rain.calc_blended_rain(
                         dz=dz, zdr=dr, kdp=kd, band=self.band,
-                        thresh_dz=thresh_dz, thresh_kdp=thresh_kd)
+                        thresh_dz=thresh_dz, thresh_kdp=thresh_kd,
+                        thresh_zdr=thresh_zdr, r_z_a=self.r_z_a,
+                        r_z_b=self.r_z_b, r_kdp_a=self.r_kdp_a,
+                        r_kdp_b=self.r_kdp_b, r_z_zdr_a=self.r_z_zdr_a,
+                        r_z_zdr_b=self.r_z_zdr_b, r_z_zdr_c=self.r_z_zdr_c,
+                        r_kdp_zdr_a=self.r_kdp_zdr_a,
+                        r_kdp_zdr_b=self.r_kdp_zdr_b,
+                        r_kdp_zdr_c=self.r_kdp_zdr_c)
                 else:
                     rain, method, zdp, fi = csu_blended_rain.calc_blended_rain(
                         dz=dz, zdr=dr, kdp=kd, ice_flag=ice_flag,
                         band=self.band, thresh_dz=thresh_dz,
-                        thresh_kdp=thresh_kd)
+                        thresh_kdp=thresh_kd, thresh_zdr=thresh_zdr,
+                        r_z_a=self.r_z_a, r_z_b=self.r_z_b,
+                        r_kdp_a=self.r_kdp_a, r_kdp_b=self.r_kdp_b,
+                        r_z_zdr_a=self.r_z_zdr_a,
+                        r_z_zdr_b=self.r_z_zdr_b, r_z_zdr_c=self.r_z_zdr_c,
+                        r_kdp_zdr_a=self.r_kdp_zdr_a,
+                        r_kdp_zdr_b=self.r_kdp_zdr_b,
+                        r_kdp_zdr_c=self.r_kdp_zdr_c)
                     self.add_field_to_radar_object(
                         zdp, field_name='ZDP', units='dB',
                         long_name='Difference Reflectivity',
