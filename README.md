@@ -4,14 +4,14 @@ This is an object-oriented Python module that facilitates precipitation retrieva
 
 DualPol Installation
 --------------------
-DualPol works under Python 2.7  and 3.4 on most Mac/Linux setups. Windows installation and other Python versions are currently untested.
+DualPol works under Python 2.7  and 3.4-3.6 on most Mac/Linux setups. Windows installation and other Python versions are currently untested.
 
 In the main source directory:  
 `python setup.py install`
 
 The following dependencies need to be installed first:
 
-- A robust version of Python 2.7  or 3.4 w/ most standard scientific packages (e.g., `numpy`, `matplotlib`, `pandas`, etc.) - Get one for free [here.](https://store.continuum.io/cshop/anaconda/)
+- A robust version of Python 2.7  or 3.4-3.6 w/ most standard scientific packages (e.g., `numpy`, `matplotlib`, `pandas`, etc.) - Get one for free [here.](https://store.continuum.io/cshop/anaconda/)
 - [The Python Atmospheric Radiation Measurement (ARM) Radar Toolkit (Py-ART)](https://github.com/ARM-DOE/pyart)
 - [CSU_RadarTools](https://github.com/CSU-Radarmet/CSU_RadarTools)
 - [SkewT](https://pypi.python.org/pypi/SkewT) - a Python 3 version can be found [here.](https://github.com/tjlang/SkewT)

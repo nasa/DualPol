@@ -1,5 +1,12 @@
 Change Log
 ----------
+v1.0.3 Major Changes (10/05/18):
+1. Fixed some documentation errors.
+2. Removed exception handling on the sounding read, as this was causing more
+   debugging issues than it was solving. Now if the sounding read fails the
+   program will crash. The resulting trackback will provide guidance to the
+   end user on how to resolve the SkewT ingest problem. 
+
 v1.0.2 Major Changes (05/12/16):
 1. Added support for band, thresh_dz, and thresh_kdp keywords in the
    blended rainfall algorithm calls. See CSU_RadarTools documentation for

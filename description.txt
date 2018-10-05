@@ -1,9 +1,9 @@
 Title/Version
 -------------
 Python Interface to Dual-Pol Radar Algorithms (DualPol)
-DualPol v1.0
-Developed & tested with Python 2.7 and 3.4
-Last changed 11/20/2015
+DualPol v1.0.3
+Developed & tested with Python 2.7 and 3.4-3.6
+Last changed 10/05/2018
 
 
 Author

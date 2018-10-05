@@ -101,7 +101,7 @@ class DualPolRetrieval(object):
         ld = String name of linear depolarization ratio field
         dp = String name of differential phase field
         sounding = Name of UWYO sounding file or 2xN array where:
-                   sounding['z'] = Heights (km MSL), must be montonic
+                   sounding['z'] = Heights (m MSL), must be montonic
                    sounding['T'] = Temperatures (C)
         winter = Flag to note whether to use wintertime retrievals
         band = Radar frequency band letter ('C' or 'S' supported)
@@ -346,7 +346,9 @@ class DualPolRetrieval(object):
             self.T_flag = False
         else:
             if isinstance(sounding, str):
-                try:
+                # Removing exception handling so if SkewT is messing up
+                # the end user will understand better how to fix it.
+                if True:
                     snd = SkewT.Sounding(sounding)
                     # Test for new version of skewt package
                     if hasattr(snd, 'soundingdata'):
@@ -355,7 +357,7 @@ class DualPolRetrieval(object):
                     else:
                         self.snd_T = snd.data['temp']
                         self.snd_z = snd.data['hght']
-                except:
+                else:
                     print('Sounding read fail')
                     self.T_flag = False
             else:
