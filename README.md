@@ -38,3 +38,6 @@ To access everything:
 import dualpol
 ```
 A demonstration notebook is in the notebooks directory.
+
+Release info:
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.2585820.svg)](https://doi.org/10.5281/zenodo.2585820)
